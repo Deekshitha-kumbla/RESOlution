@@ -2,14 +2,16 @@ import aiohttp
 import asyncio
 import re
 import os
+import requests
+from dotenv import load_dotenv
 
 
 class GetReadme:
     
-    
+    token= os.getenv('GITHUB_TOKEN')
     def __init__(self):
         self.data = None
-
+    
     @staticmethod
     async def get_readmefile(github_owner, github_repo, session):
         """Check if README mentions pip install or check for package name."""
@@ -85,3 +87,37 @@ class GetReadme:
         except Exception as e:
             return f"Exception occurred: {str(e)}"
 
+    @staticmethod
+    async def get_github_repo_stats(owner, repo, session):
+        # GitHub API URL for the repository stats
+        load_dotenv()
+        url = f"https://api.github.com/repos/{owner}/{repo}"
+        headers = {
+        'Authorization': f"token {os.getenv('GITHUB_TOKEN')}"  # Using double quotes for the f-string
+        }
+        
+
+        try:
+            async with session.get(url, headers=headers) as response:
+                if response.status != 200:
+                    return f"Error: Unable to fetch README (HTTP {response.status})"
+                
+            
+                response.raise_for_status()  # Raise an exception for 4xx or 5xx responses
+
+                # Parse the JSON response
+                data = await response.json()
+
+                # Extract stars and forks
+                stars = data.get('stargazers_count', 0)  # Default to 0 if the key is missing
+                forks = data.get('forks_count', 0)       # Default to 0 if the key is missing
+               
+                return {
+            "stars": stars,
+            "forks": forks
+             }
+
+        except Exception as e:
+            return f"Exception occurred: {str(e)}"
+        
+    

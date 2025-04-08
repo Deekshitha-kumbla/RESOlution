@@ -1,9 +1,13 @@
 import aiohttp
 import asyncio
 import re
+
+from .get_contributors import GetContributors
 from .get_readme import GetReadme
 from datetime import datetime, timedelta
 import os 
+import json
+
 
 class GetDownloads:
       
@@ -154,26 +158,23 @@ class GetDownloads:
       return download_data
     @staticmethod
     async def get_docker_stats(docker_image, session):
-        
-         if docker_image and isinstance(docker_image, str):
-            url = f"https://hub.docker.com/v2/repositories/{docker_image['username']}/{docker_image['repo']}/"
-            try:
-              async with session.get(url) as response:
-               if response.status == 200:
-                data = await response.json()  # Use async method for JSON
-                pull_count = data.get('pull_count', 'N/A')
-                star_count = data.get('star_count', 'N/A')
-                return {'pull_count':pull_count, 'star_count':star_count}
-               else:
-                
-                return {None, None}
-            except Exception as e:
-                
-                return {None, None}
-         else:
-        # In case docker_image is None
-           
-            return {'pull_count': 'N/A', 'star_count': 'N/A'}
+      if docker_image and isinstance(docker_image, dict):  # Check if docker_image is a dictionary
+        url = f"https://hub.docker.com/v2/repositories/{docker_image['username']}/{docker_image['repo']}/"
+        try:
+            async with session.get(url) as response:
+                if response.status == 200:
+                    data = await response.json()  # Use async method for JSON
+                    pull_count = data.get('pull_count', 'N/A')
+                    star_count = data.get('star_count', 'N/A')
+                    return {'pull_count': pull_count, 'star_count': star_count}
+                else:
+                    return {'pull_count': None, 'star_count': None}
+        except Exception as e:
+            return {'pull_count': None, 'star_count': None}
+      else:
+        # In case docker_image is None or not a dictionary
+        return {'pull_count': 'N/A', 'star_count': 'N/A'}
+
 
     @staticmethod
     async def get_cran_downloads(package_name, start_date, end_date, session):
@@ -219,11 +220,12 @@ class GetDownloads:
         github_downloads = await GetDownloads.get_github_release_downloads(github_owner, github_repo, session)
         # Check if PyPI package is available
         readme_url= await GetReadme.get_readmefile(github_owner, github_repo, session)
+        
         zenodo_url= await GetReadme.check_readme_for_zenodo_badge(readme_url,session)
         package_name = await GetDownloads.check_readme_for_install(readme_url, github_repo, session)
         pypi_downloads = await GetDownloads.get_pypi_downloads(package_name, session)
         npm_downloads= await GetDownloads.get_npm_downloads(package_name, session)
-        #print(package_name['doi'])
+       
         pepy_downloads= await GetDownloads.get_pepy_downloads(package_name, session)
         zenodo_downloads= await GetDownloads.get_downloads_from_zenodo(zenodo_url, session)
         docker_image= await GetReadme.extract_docker_image(readme_url,session)
@@ -234,27 +236,30 @@ class GetDownloads:
         end_date = today.strftime("%Y-%m-%d")
         cran_data= await GetDownloads.get_cran_downloads(package_name, start_date, end_date, session)
         conda_data= await GetDownloads.get_conda_downloads(github_owner,package_name, session)
-      
-        return {
+        stats_data= await GetReadme.get_github_repo_stats(github_owner,github_repo, session)
+        contributors_data, total_contributors= await GetContributors.get_active_contributors(github_owner,github_repo, session)
+       
+        download_data = {
             "GitHub": github_downloads,
-            
             "PyPI": pypi_downloads,
-            "NPM" : npm_downloads,
-             "Pepy.tech": pepy_downloads,
-             "Zenodo" : zenodo_downloads,
-             "docker": docker_data,
-             "cran" : cran_data,
-             "conda" :conda_data
-             
-             
-            
-        }
+            "NPM": npm_downloads,
+            "Pepy.tech": pepy_downloads,
+            "Zenodo": zenodo_downloads,
+            "docker": docker_data,
+            "cran": cran_data,
+            "conda": conda_data,
+        }  
+        repo_data={ "GITHUB_stats": stats_data,
+             "Contributors_data":contributors_data,
+             "Contributors_no": total_contributors}    
+        
+        return  download_data, repo_data
 
     @staticmethod
     async def get_all_downloads(owner, repo):
         """Fetch download data for a single repository."""
         async with aiohttp.ClientSession() as session:
-            result = await GetDownloads.fetch_data_for_repo(owner, repo, session)
-            return result
+            download_data, repo_data = await GetDownloads.fetch_data_for_repo(owner, repo, session)
+            return download_data, repo_data
 
 

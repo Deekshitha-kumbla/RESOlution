@@ -42,7 +42,10 @@ class RSDScraper:
          slug_name=str(row["slug"])
          get_started_url=str(row["get_started_url"])
          found_match = False  # Flag if any match is found in the current statement
-
+         if "funded" in description.lower() or "funding" in description.lower():
+                  funding = "yes"
+         else:
+                  funding = "N/A" 
         # Loop through the hierarchy to find a matching subfield
          for domain, fields in domain_data.items():
             for field, subfields in fields.items():
@@ -69,7 +72,7 @@ class RSDScraper:
     # Create a DataFrame from the matches list
        df_matches = pd.DataFrame(matches_list)
 
-       return df_matches
+       return df_matches, funding
     
     @staticmethod
     # Function to scrape GitHub link from an RSD software page

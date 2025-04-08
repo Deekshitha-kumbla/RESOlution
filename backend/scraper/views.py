@@ -3,7 +3,8 @@ from django.views import View
 from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import csrf_exempt
 from asgiref.sync import async_to_sync
-
+from .services.get_dependency import GetDependency
+from .services.get_readme import GetReadme
 from .services.get_downloads import GetDownloads
 from .services.rsd_scraper import RSDScraper
 from .services.get_citationdata import GetCitation
@@ -20,10 +21,11 @@ class RSDDataView(View):
         scraper = RSDScraper()
         downloads=GetDownloads()
         citation=GetCitation()
+      
         
         data = scraper.fetch_data()
       
-        domain_results = scraper.find_domain(data)
+        domain_results, funding = scraper.find_domain(data)
 
         # Check if 'slug_name' contains valid data
         if domain_results['slug_name'].isnull().all():
@@ -60,19 +62,22 @@ class RSDDataView(View):
 
             try:
                 github_owner, github_reponame=RSDScraper.extract_github_repo_info(github_repo)
-                downloads_data=async_to_sync(downloads.get_all_downloads)(github_owner,github_reponame)
+                downloads_data, repo_data=async_to_sync(downloads.get_all_downloads)(github_owner,github_reponame)
                 
                 file_presence = scraper.check_files_in_repo(github_repo)
                 openalex_id=citation.find_matches(github_repo, short_statement)
-                
-                
                 citation_count = citation.get_citation_count(openalex_id)
-                print(citation_count)  
+                dependency_count=GetDependency.get_repositories_using_package(github_repo)
+                print(dependency_count)
                 # Add GitHub repo, file presence, other data to the record
                 record["github_repo"] = github_repo
                 record["file_presence"] = file_presence
                 record["downloads"] = downloads_data
                 record["citation_count"]=citation_count
+                record["repo_data"]=repo_data
+                record["dependency_count"]=dependency_count
+                record["funding"] =funding
+                print(funding)
                 #print(file_presence)
                 # Append the updated record to the results list
                 updated_records.append(record)
