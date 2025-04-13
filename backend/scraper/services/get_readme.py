@@ -17,7 +17,7 @@ class GetReadme:
         """Check if README mentions pip install or check for package name."""
         url = f"https://api.github.com/repos/{github_owner}/{github_repo}/contents"
         headers = {
-        "Authorization": f"token {os.getenv('GITHUB_TOKEN')}"  # Include GitHub token for authentication
+        "Authorization": f"token {os.getenv('GITHUB_TOKEN')}"  
          }
         result = {}
 
@@ -93,7 +93,7 @@ class GetReadme:
         load_dotenv()
         url = f"https://api.github.com/repos/{owner}/{repo}"
         headers = {
-        'Authorization': f"token {os.getenv('GITHUB_TOKEN')}"  # Using double quotes for the f-string
+        'Authorization': f"token {os.getenv('GITHUB_TOKEN')}"  
         }
         
 
