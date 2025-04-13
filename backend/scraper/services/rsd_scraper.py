@@ -1,25 +1,38 @@
 import requests
 import pandas as pd
 from io import BytesIO
-from scraper.utils.excel_reader import get_science_metrix_hierarchy
+#from scraper.utils.excel_reader import get_science_metrix_hierarchy
+from scraper.utils.classification_data_reader import get_science_metrix_hierarchy, hierarchy_with_keywords
 import requests
 from bs4 import BeautifulSoup
 import json
 import re
 import os
+import string
+import nltk
+try:
+    from nltk.corpus import stopwords
+    stop_words = set(stopwords.words('english'))
+except LookupError:
+    nltk.download('stopwords')
+    from nltk.corpus import stopwords
+    stop_words = set(stopwords.words('english'))
+
 
 class RSDScraper:
     
-
+    stop_words = set(stopwords.words('english'))
+    token= os.getenv('GITHUB_TOKEN')
     def __init__(self):
         self.data = None
-
-    def fetch_data(self):
+    @staticmethod
+    def fetch_data(API):
         """Fetch data from the Research Software Directory API."""
-        response = requests.get(os.getenv('RSD_API'))
+        response = requests.get(API)
         if response.status_code == 200:
-            self.data = response.json()
-            return self.data
+            data = response.json() 
+            #print(self.data)
+            return data
         else:
             raise Exception(f"Error fetching data: {response.status_code}")
 
@@ -29,17 +42,41 @@ class RSDScraper:
             raise Exception("No data to convert. Fetch data first.")
         return pd.DataFrame(self.data)
     @staticmethod
+    def clean_text(text):
+    # Lowercase
+       text = text.lower()
+
+    # Remove punctuation
+       text = text.translate(str.maketrans('', '', string.punctuation))
+
+    # Tokenize
+       words = re.findall(r'\b\w+\b', text)
+
+    # Remove stopwords
+       filtered_words = [word for word in words if word not in stop_words]
+
+    # Return cleaned text as string or list
+       return " ".join(filtered_words)
+
+    @staticmethod
     def find_domain(data):
        domain_data = get_science_metrix_hierarchy()
-       matches_list = []
+       
+       keywords_domain_data= hierarchy_with_keywords(domain_data)
+      
+       
+       
        df = pd.DataFrame(data)  
-
+       all_matches = []
        # Iterate over each description in the DataFrame
        for idx, row in df.iterrows():
          statement = str(row["short_statement"])
          description=str(row["description"])
+         cleaned_text = RSDScraper.clean_text(description) # data preprocessing
+         readme_words = set(cleaned_text.split())
          brand_name=str(row["brand_name"])
          slug_name=str(row["slug"])
+         matches_list = []
          get_started_url=str(row["get_started_url"])
          found_match = False  # Flag if any match is found in the current statement
          if "funded" in description.lower() or "funding" in description.lower():
@@ -47,7 +84,7 @@ class RSDScraper:
          else:
                   funding = "N/A" 
         # Loop through the hierarchy to find a matching subfield
-         for domain, fields in domain_data.items():
+         ''''for domain, fields in domain_data.items():
             for field, subfields in fields.items():
                 for subfield in subfields:
                     # Check if the subfield keyword is present in the description (case-insensitive)
@@ -67,10 +104,38 @@ class RSDScraper:
                 if found_match:
                     break  # Breaks out of field loop
             if found_match:
-                break  # Breaks out of domain loop
+                break  # Breaks out of domain loop'''
+         for domain, fields in keywords_domain_data.items():
+            for field, subfields in fields.items():
+                for subfield, keywords in subfields.items():
+                    if subfield == "__field_keywords__":
+                        continue
+                    matched_keywords = [kw for kw in keywords if kw in readme_words]
+                    score = len(matched_keywords)
 
+                    if score > 1:  # Only keep matches with score > 1
+                        matches_list.append({
+                            "brand_name" :brand_name,
+                            "get_started_url": get_started_url,
+                            "slug_name":slug_name,
+                            "short_statement": statement,
+                            "Domain": domain,
+                            "Field": field,
+                            "Subfield": subfield,
+                            "project_id": row.get("project_id", idx),
+                            "matched_keywords": ", ".join(matched_keywords),
+                            "score": score
+                        })
+
+        # Keep only matches with highest score for this project
+         if matches_list:
+            max_score = max(m["score"] for m in matches_list)
+            top_matches = [m for m in matches_list if m["score"] == max_score]
+            all_matches.extend(top_matches)
+       
     # Create a DataFrame from the matches list
-       df_matches = pd.DataFrame(matches_list)
+       df_matches = pd.DataFrame(all_matches)
+       
 
        return df_matches, funding
     
@@ -82,7 +147,7 @@ class RSDScraper:
           response = requests.get(url, headers=headers, timeout=10)
 
           if response.status_code != 200:
-            print(f"Failed to access {url}")
+            #print(f"Failed to access {url}")
             return None
 
           soup = BeautifulSoup(response.text, "html.parser")
@@ -94,7 +159,7 @@ class RSDScraper:
           return github_links[0] if github_links else None
 
         except Exception as e:
-           print(f"Scraping Error for {url}: {e}")
+           #print(f"Scraping Error for {url}: {e}")
            return None
        
     @staticmethod
@@ -118,12 +183,14 @@ class RSDScraper:
         try:
             repo_owner, repo_name = RSDScraper.extract_github_repo_info(github_repo_url)
             url = f"https://api.github.com/repos/{repo_owner}/{repo_name}/contents"
-            headers = {"Accept": "application/vnd.github.v3+json"}
+            headers = {"Accept": "application/vnd.github.v3+json",
+                       "Authorization": f"token {RSDScraper.token}"}
 
             response = requests.get(url, headers=headers)
 
             # Handle API rate limits and errors
             if response.status_code == 403:
+                print("rate limit")
                 return {"error": "GitHub API rate limit exceeded"}
             elif response.status_code == 404:
                 return {"error": "Repository not found"}
@@ -136,7 +203,7 @@ class RSDScraper:
                 return {"error": "Invalid JSON response from GitHub"}
         
             file_names = [file["name"].lower() for file in files]
-
+          
             # Check for specific files, return only boolean values
             return {
                 "README": any(name in ["readme.md", "readme.rst"] for name in file_names),
