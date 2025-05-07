@@ -136,7 +136,6 @@ class RSDScraper:
     # Create a DataFrame from the matches list
        df_matches = pd.DataFrame(all_matches)
        
-
        return df_matches, funding
     
     @staticmethod
@@ -190,7 +189,7 @@ class RSDScraper:
 
             # Handle API rate limits and errors
             if response.status_code == 403:
-                print("rate limit")
+                
                 return {"error": "GitHub API rate limit exceeded"}
             elif response.status_code == 404:
                 return {"error": "Repository not found"}

@@ -7,27 +7,31 @@ class GetCitation:
     def __init__(self):
         self.data = None
     @staticmethod
-    def get_openalex_id(software_name):
+    def get_openalex_id(software_name, max_retries=3):
            base_url = "https://api.openalex.org/works"
            
            params = {
               "search": software_name,  # Searching for software name
-              "per_page": 5  # Adjust as needed
-               }
-
-           response = requests.get(base_url, params=params)
-
-           if response.status_code == 200:
-               data = response.json()
-               results = data.get("results", [])
-
-               if not results:
-                   return f"No OpenAlex ID found for {software_name}"
-
-               ids = {work.get("title", "Unknown Title"): work.get("id") for work in results}
-               return ids
-           else:
+              #"per_page": 5  
+               } # also you can add header including app name , or emial id
+           for attempt in range(max_retries):
+            response = requests.get(base_url, params=params)
+        
+            if response.status_code == 200:
+             data = response.json()
+             results = data.get("results", [])
+             if not results:
+                return f"No OpenAlex ID found for {software_name}"
+             ids = {work.get("title", "Unknown Title"): work.get("id") for work in results}
+             return ids
+            elif response.status_code == 503:
+               return (f"Attempt {attempt + 1}: Server unavailable, retrying...")
+               time.sleep(2)  # Wait 2 seconds before retrying
+            else:
                return f"Error fetching data: {response.status_code}"
+    
+           return "Failed after retries due to server error."
+           
 
     @staticmethod
     def find_matches(github_repo, short_statement):

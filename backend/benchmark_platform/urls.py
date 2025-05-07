@@ -10,5 +10,5 @@ urlpatterns = [
     path('api/', include('api.urls')),
     #path('', lambda request: HttpResponseRedirect('/api/')),
     path('', home),
-    path('scraper/',include('scraper.urls'))
+    path('scraper/', include('scraper.urls')),
 ]
