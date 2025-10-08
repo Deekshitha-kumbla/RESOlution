@@ -39,8 +39,12 @@ jobs:
           myToken: ${{ secrets.GITHUB_TOKEN }}
       - uses: actions/upload-artifact@v4
         with:
-          name: FAIRSECO Result
-          path: .FAIRSECO/
+    name: FAIRSECO Result
+    path: .FAIRSECO/
+    if-no-files-found: warn
+    compression-level: 6
+    overwrite: false
+    include-hidden-files: true
       - name: Commit files
         run: |
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
