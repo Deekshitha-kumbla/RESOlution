@@ -3,6 +3,7 @@ name: RunFAIRSECO
 on:
   # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
+
 permissions:
   contents: write
 
@@ -30,21 +31,31 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/checkout@v4
         with:
           repository: SecureSECO/FAIRSECO
           path: FAIRSECO_Assets
+
       - uses: SecureSECO/FAIRSECO@v1.0.2
         with:
           myToken: ${{ secrets.GITHUB_TOKEN }}
+
+      # Optional: debug what FAIRSECO outputs
+      - name: Debug FAIRSECO output
+        run: |
+          echo "Listing workspace contents:"
+          ls -laR
+
       - uses: actions/upload-artifact@v4
         with:
-    name: FAIRSECO Result
-    path: .FAIRSECO/
-    if-no-files-found: warn
-    compression-level: 6
-    overwrite: false
-    include-hidden-files: true
+          name: FAIRSECO Result
+          path: .FAIRSECO/
+          if-no-files-found: warn
+          compression-level: 6
+          overwrite: false
+          include-hidden-files: true
+
       - name: Commit files
         run: |
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
@@ -52,6 +63,7 @@ jobs:
           git pull
           git add -f ./.fairseco_history.json
           git commit --allow-empty -m "Update FAIRSECO history file"
+
       - name: Push changes
         uses: ad-m/github-push-action@master
         with:
