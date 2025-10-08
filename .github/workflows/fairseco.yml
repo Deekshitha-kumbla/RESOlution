@@ -1,71 +1,58 @@
-name: RunFAIRSECO
+RunFAIRSECO:
+  needs: [RunTortellini, RunSBOM]
+  runs-on: ubuntu-latest
+  permissions:
+    contents: write
 
-on:
-  # Allows you to run this workflow manually from the Actions tab
-  workflow_dispatch:
+  steps:
+    - uses: actions/checkout@v4
 
-permissions:
-  contents: write
+    - uses: actions/checkout@v4
+      with:
+        repository: SecureSECO/FAIRSECO
+        path: FAIRSECO_Assets
 
-jobs:
-  RunTortellini:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: tortellini-tools/action@v3
-      - uses: actions/upload-artifact@v4
-        with:
-          name: tortellini-result
-          path: .tortellini/out
+    # Download required artifacts from previous jobs
+    - name: Download Tortellini result
+      uses: actions/download-artifact@v4
+      with:
+        name: tortellini-result
+        path: .tortellini/out
 
-  RunSBOM:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: anchore/sbom-action@v0
-        with:
-          artifact-name: SBOM.spdx
+    - name: Download SBOM result
+      uses: actions/download-artifact@v4
+      with:
+        name: SBOM.spdx
+        path: ./SBOM/
 
-  RunFAIRSECO:
-    needs: [RunTortellini, RunSBOM]
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
+    # Run FAIRSECO
+    - uses: SecureSECO/FAIRSECO@v1.0.2
+      with:
+        myToken: ${{ secrets.GITHUB_TOKEN }}
 
-      - uses: actions/checkout@v4
-        with:
-          repository: SecureSECO/FAIRSECO
-          path: FAIRSECO_Assets
+    # Debug: list all files (optional but recommended)
+    - name: Debug FAIRSECO output
+      run: ls -laR
 
-      - uses: SecureSECO/FAIRSECO@v1.0.2
-        with:
-          myToken: ${{ secrets.GITHUB_TOKEN }}
+    # Upload results
+    - uses: actions/upload-artifact@v4
+      with:
+        name: FAIRSECO Result
+        path: .FAIRSECO/
+        include-hidden-files: true
+        if-no-files-found: warn
 
-      # Optional: debug what FAIRSECO outputs
-      - name: Debug FAIRSECO output
-        run: |
-          echo "Listing workspace contents:"
-          ls -laR
+    # Commit and push history
+    - name: Commit files
+      run: |
+        git config --local user.email "github-actions[bot]@users.noreply.github.com"
+        git config --local user.name "github-actions[bot]"
+        git pull
+        git add -f ./.fairseco_history.json
+        git commit --allow-empty -m "Update FAIRSECO history file"
 
-      - uses: actions/upload-artifact@v4
-        with:
-          name: FAIRSECO Result
-          path: .FAIRSECO/
-          if-no-files-found: warn
-          compression-level: 6
-          overwrite: false
-          include-hidden-files: true
-
-      - name: Commit files
-        run: |
-          git config --local user.email "github-actions[bot]@users.noreply.github.com"
-          git config --local user.name "github-actions[bot]"
-          git pull
-          git add -f ./.fairseco_history.json
-          git commit --allow-empty -m "Update FAIRSECO history file"
-
-      - name: Push changes
-        uses: ad-m/github-push-action@master
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          branch: ${{ github.ref }}
+    - name: Push changes
+      uses: ad-m/github-push-action@master
+      with:
+        github_token: ${{ secrets.GITHUB_TOKEN }}
+        branch: ${{ github.ref }}
